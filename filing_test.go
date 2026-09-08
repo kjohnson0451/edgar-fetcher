@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -94,6 +97,82 @@ func TestFindPrimaryXML(t *testing.T) {
 			}
 			if name != tt.wantName {
 				t.Errorf("got name %q, want %q", name, tt.wantName)
+			}
+		})
+	}
+}
+
+// testEdgarClient builds an edgarClient safe for use against an
+// httptest.Server: 1,000,000 requests/second so the rate limiter's pacing
+// is negligible in test runs. Note the ceiling this bumps into —
+// newRateLimiter computes its tick interval as time.Second / requestsPerSecond,
+// and an EXTREME requestsPerSecond value can round that interval down to
+// 0, which panics inside time.NewTicker. 1e6 gives a 1-microsecond
+// interval: comfortably fast, comfortably away from that edge.
+func testEdgarClient() *edgarClient {
+	return newEdgarClient("edgar-fetcher-test/0.1", 1_000_000)
+}
+
+func TestFetchIndexJSON(t *testing.T) {
+	client := testEdgarClient()
+
+	tests := []struct {
+		name              string
+		handler           http.HandlerFunc
+		wantErrContains   string // empty means "expect no error"
+		wantFirstItemName string
+	}{
+		{
+			name: "200 with valid JSON returns the decoded index",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`{"directory":{"item":[{"name":"primary_doc.xml","type":"4","size":"1024"}]}}`))
+			},
+			wantFirstItemName: "primary_doc.xml",
+		},
+		{
+			name: "non-200 status returns an error mentioning the status code",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			},
+			wantErrContains: "status 404",
+		},
+		{
+			name: "malformed JSON body returns a decode error",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`{not valid json`))
+			},
+			wantErrContains: "decoding index.json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// A REAL local HTTP server, not a mock — fetchIndexJSON has no
+			// idea this isn't sec.gov. That's only possible because
+			// fetchIndexJSON takes url as a plain parameter rather than
+			// hardcoding a host internally.
+			server := httptest.NewServer(tt.handler)
+			defer server.Close()
+
+			idx, err := fetchIndexJSON(context.Background(), client, server.URL)
+
+			if tt.wantErrContains != "" {
+				if err == nil {
+					t.Fatalf("got nil error, want one containing %q", tt.wantErrContains)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrContains) {
+					t.Errorf("error = %q, want it to contain %q", err.Error(), tt.wantErrContains)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(idx.Directory.Item) == 0 || idx.Directory.Item[0].Name != tt.wantFirstItemName {
+				t.Errorf("got items %+v, want first item name %q", idx.Directory.Item, tt.wantFirstItemName)
 			}
 		})
 	}
