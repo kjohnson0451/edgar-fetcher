@@ -64,6 +64,16 @@ type columnOffsets struct {
 	formType, companyName, cik, dateFiled, fileName int
 }
 
+// parseFormIndex scans a daily form.idx body and returns one FilingRef per
+// row whose Form Type matches formType. Column positions are read from the
+// header line at runtime rather than hardcoded, but header detection
+// requires the line to literally start with "Form Type" — if it doesn't,
+// every row is silently skipped with no error. Column offsets are also
+// trusted positionally with no ordering check, so a reordered or shifted
+// header can panic or silently drop matching rows (see dailyindex_test.go).
+//
+// Duplicate accession numbers across rows are intentional (issuer +
+// reporting owner) and are not deduped here — that's main.go's job.
 func parseFormIndex(body io.Reader, formType string) ([]FilingRef, error) {
 	scanner := bufio.NewScanner(body)
 	// .idx files can have long lines (long company names); grow the buffer
