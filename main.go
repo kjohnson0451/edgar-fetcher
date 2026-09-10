@@ -22,7 +22,10 @@ func main() {
 	parserURL := getEnv("PARSER_URL", "http://edgar-parser-svc:8000/api/v1/filings")
 	pollInterval := getEnvDuration("POLL_INTERVAL", 15*time.Minute)
 
-	client := newEdgarClient(userAgent, 4.0) // 4 req/sec — comfortably under SEC's 10 req/sec ceiling
+	client := newEdgarClient(EdgarClientConfig{
+		UserAgent:         userAgent,
+		RequestsPerSecond: 4.0, // comfortably under SEC's 10 req/sec ceiling
+	})
 	publisher := NewHTTPPublisher(parserURL)
 
 	// In-memory only — resets on pod restart. That's a known gap, not an

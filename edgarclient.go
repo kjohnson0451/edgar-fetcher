@@ -18,11 +18,21 @@ type edgarClient struct {
 	limiter   *rateLimiter
 }
 
-func newEdgarClient(userAgent string, requestsPerSecond float64) *edgarClient {
+// EdgarClientConfig bundles newEdgarClient's parameters into a named
+// struct rather than a growing positional argument list. Each field is
+// named at the call site (EdgarClientConfig{UserAgent: ..., ...}), so
+// adding a field later doesn't force every existing call site to be
+// re-read to figure out what a new positional value means.
+type EdgarClientConfig struct {
+	UserAgent         string
+	RequestsPerSecond float64
+}
+
+func newEdgarClient(cfg EdgarClientConfig) *edgarClient {
 	return &edgarClient{
 		http:      &http.Client{Timeout: 30 * time.Second},
-		userAgent: userAgent,
-		limiter:   newRateLimiter(requestsPerSecond),
+		userAgent: cfg.UserAgent,
+		limiter:   newRateLimiter(cfg.RequestsPerSecond),
 	}
 }
 

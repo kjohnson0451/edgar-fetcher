@@ -110,7 +110,10 @@ func TestFindPrimaryXML(t *testing.T) {
 // 0, which panics inside time.NewTicker. 1e6 gives a 1-microsecond
 // interval: comfortably fast, comfortably away from that edge.
 func testEdgarClient() *edgarClient {
-	return newEdgarClient("edgar-fetcher-test/0.1", 1_000_000)
+	return newEdgarClient(EdgarClientConfig{
+		UserAgent:         "edgar-fetcher-test/0.1",
+		RequestsPerSecond: 1_000_000,
+	})
 }
 
 func TestFetchIndexJSON(t *testing.T) {
