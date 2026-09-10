@@ -38,8 +38,8 @@ func resolveFilingXML(ctx context.Context, client *edgarClient, ref FilingRef) (
 	}
 
 	indexURL := fmt.Sprintf(
-		"https://www.sec.gov/Archives/edgar/data/%s/%s/index.json",
-		cikTrimmed, ref.AccessionNoDashes(),
+		"%s/Archives/edgar/data/%s/%s/index.json",
+		client.baseURL, cikTrimmed, ref.AccessionNoDashes(),
 	)
 
 	idx, err := fetchIndexJSON(ctx, client, indexURL)
@@ -53,8 +53,8 @@ func resolveFilingXML(ctx context.Context, client *edgarClient, ref FilingRef) (
 	}
 
 	docURL := fmt.Sprintf(
-		"https://www.sec.gov/Archives/edgar/data/%s/%s/%s",
-		cikTrimmed, ref.AccessionNoDashes(), docName,
+		"%s/Archives/edgar/data/%s/%s/%s",
+		client.baseURL, cikTrimmed, ref.AccessionNoDashes(), docName,
 	)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, docURL, nil)

@@ -109,10 +109,16 @@ func TestFindPrimaryXML(t *testing.T) {
 // and an EXTREME requestsPerSecond value can round that interval down to
 // 0, which panics inside time.NewTicker. 1e6 gives a 1-microsecond
 // interval: comfortably fast, comfortably away from that edge.
+//
+// BaseURL is a placeholder here — fetchIndexJSON takes a full URL as a
+// parameter and never consults client.baseURL, so it's irrelevant for
+// these tests. It matters once we test pollOnce, which DOES resolve URLs
+// through client.baseURL via dailyIndexURL/resolveFilingXML.
 func testEdgarClient() *edgarClient {
 	return newEdgarClient(EdgarClientConfig{
 		UserAgent:         "edgar-fetcher-test/0.1",
 		RequestsPerSecond: 1_000_000,
+		BaseURL:           "http://unused.invalid",
 	})
 }
 

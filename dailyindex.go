@@ -10,15 +10,16 @@ import (
 	"time"
 )
 
-// dailyIndexURL builds the URL for a given day's form-sorted index file.
-// EDGAR groups these by calendar quarter, e.g.:
+// dailyIndexURL builds the URL for a given day's form-sorted index file,
+// under whatever host baseURL points at. EDGAR groups these by calendar
+// quarter, e.g.:
 //
-//	https://www.sec.gov/Archives/edgar/daily-index/2026/QTR3/form.20260728.idx
-func dailyIndexURL(date time.Time) string {
+//	{baseURL}/Archives/edgar/daily-index/2026/QTR3/form.20260728.idx
+func dailyIndexURL(baseURL string, date time.Time) string {
 	quarter := (int(date.Month())-1)/3 + 1
 	return fmt.Sprintf(
-		"https://www.sec.gov/Archives/edgar/daily-index/%d/QTR%d/form.%s.idx",
-		date.Year(), quarter, date.Format("20060102"),
+		"%s/Archives/edgar/daily-index/%d/QTR%d/form.%s.idx",
+		baseURL, date.Year(), quarter, date.Format("20060102"),
 	)
 }
 
@@ -31,7 +32,7 @@ func dailyIndexURL(date time.Time) string {
 // boundaries from the header row itself rather than hardcoding character
 // offsets, since EDGAR has shifted exact widths across format eras before.
 func fetchDailyIndex(ctx context.Context, client *edgarClient, date time.Time, formType string) ([]FilingRef, error) {
-	url := dailyIndexURL(date)
+	url := dailyIndexURL(client.baseURL, date)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -64,16 +65,6 @@ type columnOffsets struct {
 	formType, companyName, cik, dateFiled, fileName int
 }
 
-// parseFormIndex scans a daily form.idx body and returns one FilingRef per
-// row whose Form Type matches formType. Column positions are read from the
-// header line at runtime rather than hardcoded, but header detection
-// requires the line to literally start with "Form Type" — if it doesn't,
-// every row is silently skipped with no error. Column offsets are also
-// trusted positionally with no ordering check, so a reordered or shifted
-// header can panic or silently drop matching rows (see dailyindex_test.go).
-//
-// Duplicate accession numbers across rows are intentional (issuer +
-// reporting owner) and are not deduped here — that's main.go's job.
 func parseFormIndex(body io.Reader, formType string) ([]FilingRef, error) {
 	scanner := bufio.NewScanner(body)
 	// .idx files can have long lines (long company names); grow the buffer

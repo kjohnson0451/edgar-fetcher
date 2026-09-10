@@ -21,10 +21,12 @@ func main() {
 	userAgent := requireEnv("EDGAR_USER_AGENT")
 	parserURL := getEnv("PARSER_URL", "http://edgar-parser-svc:8000/api/v1/filings")
 	pollInterval := getEnvDuration("POLL_INTERVAL", 15*time.Minute)
+	baseURL := getEnv("EDGAR_BASE_URL", "https://www.sec.gov")
 
 	client := newEdgarClient(EdgarClientConfig{
 		UserAgent:         userAgent,
 		RequestsPerSecond: 4.0, // comfortably under SEC's 10 req/sec ceiling
+		BaseURL:           baseURL,
 	})
 	publisher := NewHTTPPublisher(parserURL)
 
@@ -39,6 +41,7 @@ func main() {
 
 	slog.Info("edgar-fetcher starting",
 		"parser_url", parserURL,
+		"base_url", baseURL,
 		"poll_interval", pollInterval.String(),
 	)
 
