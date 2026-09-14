@@ -27,10 +27,11 @@ type indexJSON struct {
 	} `json:"directory"`
 }
 
-// resolveFilingXML takes a FilingRef (which only tells us a filing exists)
-// and fetches the actual Form 4 XML content — this is the second of the two
-// hops described in our design discussion: daily index -> filing index.json
-// -> actual document.
+// resolveFilingXML takes a FilingRef — produced by the earlier daily-index
+// fetch, which only tells us a filing exists — and performs the two-hop
+// lookup described in our design discussion to get its actual Form 4 XML
+// content: filing's index.json, then the primary document referenced
+// inside it.
 func resolveFilingXML(ctx context.Context, client *edgarClient, ref FilingRef) (string, error) {
 	cikTrimmed := strings.TrimLeft(ref.CIK, "0")
 	if cikTrimmed == "" {
