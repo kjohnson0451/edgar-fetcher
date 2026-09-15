@@ -79,6 +79,11 @@ func resolveFilingXML(ctx context.Context, client *edgarClient, ref FilingRef) (
 	return string(raw), nil
 }
 
+// fetchIndexJSON GETs the given URL and decodes the response into an
+// indexJSON — the directory listing of every document inside one filing
+// submission (names, types, sizes), not the documents themselves. It
+// doesn't pick out which listed document is the primary one; that's
+// findPrimaryXML's job, back in resolveFilingXML, once this returns.
 func fetchIndexJSON(ctx context.Context, client *edgarClient, url string) (*indexJSON, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
