@@ -28,6 +28,11 @@ type HTTPPublisher struct {
 	Client *http.Client
 }
 
+// NewHTTPPublisher constructs an HTTPPublisher targeting url — edgar-parser's
+// POST /api/v1/filings endpoint in production, or an httptest.Server's URL
+// in tests. Capitalized like an exported name even though this is package
+// main with nothing outside importing it — a naming convention carried
+// over, not a package-boundary requirement here.
 func NewHTTPPublisher(url string) *HTTPPublisher {
 	return &HTTPPublisher{
 		URL:    url,
