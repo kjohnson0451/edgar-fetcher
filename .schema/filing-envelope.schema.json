@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/<org>/edgar-schemas/schemas/filing-envelope.schema.json",
+  "title": "FilingEnvelope",
+  "description": "The payload edgar-fetcher POSTs to edgar-parser. Intentionally both the current wire format and the future queue-message format.",
+  "type": "object",
+  "properties": {
+    "cik": {
+      "type": "string",
+      "description": "As printed in EDGAR's daily index — may or may not be zero-padded to 10 digits."
+    },
+    "accession_number": {
+      "type": "string",
+      "description": "EDGAR's unique ID for the submission, e.g. \"0001234567-26-000123\"."
+    },
+    "form_type": {
+      "type": "string",
+      "description": "e.g. \"4\" for a Form 4 insider transaction filing."
+    },
+    "filed_at": {
+      "type": "string",
+      "description": "YYYY-MM-DD, as printed in EDGAR's daily index."
+    },
+    "raw_xml": {
+      "type": "string",
+      "description": "The unparsed filing content."
+    },
+    "fetched_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp of when edgar-fetcher retrieved the filing."
+    }
+  },
+  "required": [
+    "cik",
+    "accession_number",
+    "form_type",
+    "filed_at",
+    "raw_xml",
+    "fetched_at"
+  ],
+  "additionalProperties": false
+}
