@@ -25,3 +25,12 @@ repos:
           - chore
           - data
           - security
+  - repo: local
+    hooks:
+      - id: check-generated-not-hand-edited
+        name: Verify generated files match real generation output
+        entry: scripts/check-generated.sh
+        language: system
+        files: '_generated\.go$'
+        pass_filenames: false
+        stages: [pre-commit]
