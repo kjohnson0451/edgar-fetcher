@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["^Makefile$"],
+      "matchStrings": [
+        "SCHEMA_TAG\\s*:=\\s*(?<currentValue>v\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "edgar-schemas",
+      "packageNameTemplate": "kjohnson0451/edgar-schemas",
+      "datasourceTemplate": "git-tags",
+      "versioningTemplate": "semver"
+    }
+  ]
+}
