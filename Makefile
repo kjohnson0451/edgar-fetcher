@@ -2,7 +2,7 @@
 
 GOJSONSCHEMA_VERSION := v0.17.0
 
-SCHEMA_TAG  := v1.0.0
+SCHEMA_TAG  := v1.0.1
 SCHEMA_URL  := https://raw.githubusercontent.com/kjohnson0451/edgar-schemas/$(SCHEMA_TAG)/schemas/filing-envelope.schema.json
 SCHEMA_DIR  := .schema
 SCHEMA_FILE := $(SCHEMA_DIR)/filing-envelope.schema.json
