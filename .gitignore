@@ -34,3 +34,6 @@ Thumbs.db
 
 # Env files (already in place for Edgar Pipeline)
 *.env
+
+# Fetched schema (rebuilt by make fetch-schema)
+.schema/
