@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"time"
@@ -61,8 +62,9 @@ func main() {
 // reflects fetchDailyIndex failing outright — a per-filing failure
 // (resolveFilingXML or Publish erroring) is logged and skipped, never
 // propagated, so a bad filing can't block the rest of the day's batch. A
-// filing is only added to seen after BOTH resolve and publish succeed; a
-// failed Publish leaves it eligible for retry on the next cycle. See
+// filing is added to seen after resolve and publish both succeed, or when
+// the parser rejects it outright (ErrFilingRejected, a 4xx). Any other
+// Publish failure leaves it eligible for retry on the next cycle. See
 // main_test.go for the exact behavior this locks in, including what
 // happens to duplicate accession numbers.
 func pollOnce(ctx context.Context, client *edgarClient, publisher FilingPublisher, seen map[string]struct{}) error {
@@ -105,7 +107,19 @@ func pollOnce(ctx context.Context, client *edgarClient, publisher FilingPublishe
 			FetchedAt:       time.Now().UTC(),
 		}
 
-		if err := publisher.Publish(ctx, envelope); err != nil {
+		err = publisher.Publish(ctx, envelope)
+		switch {
+		case errors.Is(err, ErrFilingRejected):
+			// Permanent: resending won't change the answer, so mark it
+			// seen and move on instead of retrying every cycle.
+			seen[acc] = struct{}{}
+			slog.Error("parser rejected filing, not retrying",
+				"accession_number", acc,
+				"company", ref.CompanyName,
+				"error", err,
+			)
+			continue
+		case err != nil:
 			slog.Error("publish failed",
 				"accession_number", acc,
 				"company", ref.CompanyName,
