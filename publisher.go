@@ -4,10 +4,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
+
+// ErrFilingRejected marks a permanent failure: the parser understood the
+// request but will never accept this filing as sent (a 4xx response), so
+// retrying it is pointless. Publish wraps it with %w; callers check for it
+// with errors.Is. Any other Publish error is treated as transient and is
+// worth retrying. See ADR-0004.
+var ErrFilingRejected = errors.New("parser rejected filing")
 
 // FilingPublisher is the seam we designed for: edgar-fetcher's polling logic
 // only ever talks to this interface, never to net/http directly. Today the
@@ -62,6 +71,12 @@ func (p *HTTPPublisher) Publish(ctx context.Context, envelope FilingEnvelope) er
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+		// The parser puts the rejection reason in the body. Read a bounded
+		// amount so it can be logged without trusting the body's size.
+		reason, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("%w: status %d: %s", ErrFilingRejected, resp.StatusCode, reason)
+	}
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("parser returned status %d", resp.StatusCode)
 	}
