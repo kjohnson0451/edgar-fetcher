@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -67,17 +68,24 @@ func TestHTTPPublisher_Publish_SendsCorrectRequest(t *testing.T) {
 // TestHTTPPublisher_Publish_StatusHandling mirrors fetchIndexJSON's
 // table-driven status test — same technique, applied here to Publish's
 // slightly different rule: it treats ANYTHING >= 300 as an error
-// (fetchIndexJSON only accepted an exact 200).
+// (fetchIndexJSON only accepted an exact 200). Within that, only 4xx is
+// ErrFilingRejected. The 400, 499, and 500 cases sit on the edges of the
+// 4xx check, so an off-by-one in either bound fails one of them.
 func TestHTTPPublisher_Publish_StatusHandling(t *testing.T) {
 	tests := []struct {
 		name            string
 		status          int
+		body            string // what the fake parser writes after the status
 		wantErrContains string // empty means "expect no error"
+		wantRejected    bool   // whether errors.Is(err, ErrFilingRejected)
 	}{
 		{name: "200 OK returns no error", status: http.StatusOK},
 		{name: "204 No Content is still under 300, no error", status: http.StatusNoContent},
 		{name: "300 is the >= 300 boundary — treated as an error", status: http.StatusMultipleChoices, wantErrContains: "status 300"},
-		{name: "500 returns an error mentioning the status", status: http.StatusInternalServerError, wantErrContains: "status 500"},
+		{name: "400 is the lower 4xx boundary, rejected", status: http.StatusBadRequest, wantErrContains: "status 400", wantRejected: true},
+		{name: "422 is rejected and carries the parser's reason", status: http.StatusUnprocessableEntity, body: "unsupported form type", wantErrContains: "unsupported form type", wantRejected: true},
+		{name: "499 is the upper 4xx boundary, rejected", status: 499, wantErrContains: "status 499", wantRejected: true},
+		{name: "500 returns an error mentioning the status, not rejected", status: http.StatusInternalServerError, wantErrContains: "status 500"},
 	}
 
 	envelope := FilingEnvelope{CIK: "1234567", AccessionNumber: "0001234567-26-000123", FormType: "4"}
@@ -89,6 +97,7 @@ func TestHTTPPublisher_Publish_StatusHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.status)
+				io.WriteString(w, tt.body)
 			}))
 			defer server.Close()
 
@@ -101,6 +110,9 @@ func TestHTTPPublisher_Publish_StatusHandling(t *testing.T) {
 				}
 				if !strings.Contains(err.Error(), tt.wantErrContains) {
 					t.Errorf("error = %q, want it to contain %q", err.Error(), tt.wantErrContains)
+				}
+				if got := errors.Is(err, ErrFilingRejected); got != tt.wantRejected {
+					t.Errorf("errors.Is(err, ErrFilingRejected) = %v, want %v", got, tt.wantRejected)
 				}
 				return
 			}
