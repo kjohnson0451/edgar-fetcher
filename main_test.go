@@ -12,13 +12,18 @@ import (
 // fakePublisher is a minimal FilingPublisher for tests — this is the exact
 // seam FilingPublisher was designed for (see publisher.go's comment): swap
 // in a fake without touching pollOnce at all. failFor lets a specific
-// filing's Publish call be made to fail on command.
+// filing's Publish call be made to fail on command with a transient error;
+// rejectedFor makes it fail with ErrFilingRejected, as a 4xx would.
 type fakePublisher struct {
-	published []FilingEnvelope
-	failFor   map[string]bool // keyed by AccessionNumber
+	published   []FilingEnvelope
+	failFor     map[string]bool // keyed by AccessionNumber
+	rejectedFor map[string]bool // keyed by AccessionNumber
 }
 
 func (p *fakePublisher) Publish(ctx context.Context, envelope FilingEnvelope) error {
+	if p.rejectedFor[envelope.AccessionNumber] {
+		return fmt.Errorf("%w: simulated rejection for %s", ErrFilingRejected, envelope.AccessionNumber)
+	}
 	if p.failFor[envelope.AccessionNumber] {
 		return fmt.Errorf("simulated publish failure for %s", envelope.AccessionNumber)
 	}
@@ -26,7 +31,7 @@ func (p *fakePublisher) Publish(ctx context.Context, envelope FilingEnvelope) er
 	return nil
 }
 
-// dailyIndexFixture contains six rows covering every branch pollOnce can
+// dailyIndexFixture contains seven rows covering every branch pollOnce can
 // take in one poll cycle. See the accompanying comment on each accession
 // number below for what it's meant to exercise.
 const dailyIndexFixture = `Form Type   Company Name                    CIK         Date Filed  File Name
@@ -35,7 +40,8 @@ const dailyIndexFixture = `Form Type   Company Name                    CIK      
 4           Publish Fail Co                 1000003     2026-09-10  edgar/data/1000003/0001000003-26-000003.txt
 4           Dup Fail Co                     1000004     2026-09-10  edgar/data/1000004/0001000004-26-000004.txt
 4           Dup Success Co                  9000004     2026-09-10  edgar/data/9000004/0001000004-26-000004.txt
-4           Clean Success Co                1000005     2026-09-10  edgar/data/1000005/0001000005-26-000005.txt`
+4           Clean Success Co                1000005     2026-09-10  edgar/data/1000005/0001000005-26-000005.txt
+4           Rejected Co                     1000006     2026-09-10  edgar/data/1000006/0001000006-26-000006.txt`
 
 const validIndexJSON = `{"directory":{"item":[{"name":"primary_doc.xml","type":"4","size":"512"}]}}`
 const validDocXML = `<ownershipDocument><stub>test</stub></ownershipDocument>`
@@ -122,6 +128,11 @@ func TestPollOnce_MixedBatch(t *testing.T) {
 		"/Archives/edgar/data/1000005/000100000526000005/index.json":       {status: http.StatusOK, body: validIndexJSON},
 		"/Archives/edgar/data/1000005/000100000526000005/primary_doc.xml": {status: http.StatusOK, body: validDocXML},
 
+		// REJECTED: resolves fine; fakePublisher is configured below to
+		// reject this one, as the parser would with a 422.
+		"/Archives/edgar/data/1000006/000100000626000006/index.json":       {status: http.StatusOK, body: validIndexJSON},
+		"/Archives/edgar/data/1000006/000100000626000006/primary_doc.xml": {status: http.StatusOK, body: validDocXML},
+
 		// Deliberately NOT registering any path for ALREADY_SEEN
 		// (1000000/000100000026000000) — if pollOnce's dedup check is
 		// broken and it tries to resolve this filing anyway, the fake
@@ -135,7 +146,8 @@ func TestPollOnce_MixedBatch(t *testing.T) {
 		BaseURL:           server.URL,
 	})
 	publisher := &fakePublisher{
-		failFor: map[string]bool{"0001000003-26-000003": true}, // PUBLISH_FAIL
+		failFor:     map[string]bool{"0001000003-26-000003": true}, // PUBLISH_FAIL
+		rejectedFor: map[string]bool{"0001000006-26-000006": true}, // REJECTED
 	}
 	seen := map[string]struct{}{
 		"0001000000-26-000000": {}, // pre-seed ALREADY_SEEN as already processed
@@ -150,6 +162,7 @@ func TestPollOnce_MixedBatch(t *testing.T) {
 		"0001000000-26-000000": {}, // pre-existing, untouched
 		"0001000004-26-000004": {}, // DUP_SUCCESS — the second duplicate, which won
 		"0001000005-26-000005": {}, // CLEAN_SUCCESS
+		"0001000006-26-000006": {}, // REJECTED — seen so it isn't retried, though never published
 	}
 	if len(seen) != len(wantSeen) {
 		t.Errorf("seen has %d entries, want %d\n  got:  %+v\n  want: %+v", len(seen), len(wantSeen), seen, wantSeen)
@@ -174,5 +187,8 @@ func TestPollOnce_MixedBatch(t *testing.T) {
 	}
 	if publishedAccessions["0001000003-26-000003"] {
 		t.Error("PUBLISH_FAIL's accession appears in published — it should have failed, not succeeded")
+	}
+	if publishedAccessions["0001000006-26-000006"] {
+		t.Error("REJECTED's accession appears in published — it should have been rejected, not succeeded")
 	}
 }
